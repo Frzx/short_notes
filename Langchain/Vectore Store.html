@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Langchain Vector Store flow</title>
+
+<style>
+
+/* ===============================
+   GENERAL DARK MODE STYLES
+   =============================== */
+:root {
+    --color-bg-main: #1e1e1e;
+    --color-bg-secondary: #252526;
+    --color-text-primary: #cccccc;
+    --color-accent-blue: #00bcd4;
+    --color-shadow: rgba(0, 0, 0, 0.4);
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    padding: 20px;
+    padding-bottom: 80px;
+    background: var(--color-bg-main);
+    color: var(--color-text-primary);
+}
+
+h1, h2, h3 {
+    color: var(--color-accent-blue);
+}
+
+strong {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+/* ===============================
+   PYGMENTS CODE STYLES
+   =============================== */
+.highlight {
+    background: #1e1e1e;
+    padding: 8px;
+    border-radius: 6px;
+    overflow-x: auto;
+    overflow-y: auto; /* vertical scroll */
+    max-height: 67vh;   /* 67% of viewport height */
+    font-family: "Fira Code", Consolas, monospace;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #d4d4d4;
+}
+
+pre.highlight {
+    border-left: 4px solid var(--color-accent-blue);
+}
+
+/* Pygments token colors (VS Code Monokai-like) */
+.highlight .c { color: #6A9955; font-style: italic; }     /* comments */
+.highlight .k { color: #569CD6; }                         /* keywords */
+.highlight .o { color: #D4D4D4; }                         /* operators */
+.highlight .cm { color: #6A9955; font-style: italic; }    /* comment */
+.highlight .cp { color: #9CDCFE; }                        /* builtin */
+.highlight .nc { color: #4EC9B0; }                        /* class names */
+.highlight .nf { color: #DCDCAA; }                        /* functions */
+.highlight .nn { color: #DCDCAA; }                        /* names */
+.highlight .s { color: #CE9178; }                         /* strings */
+.highlight .na { color: #9CDCFE; }                        /* attributes */
+.highlight .nb { color: #4EC9B0; }                        /* builtins */
+.highlight .nt { color: #569CD6; }                        /* tags */
+.highlight .err { color: #F44747; }                       /* errors */
+.highlight .m { color: #B5CEA8; }                         /* numbers */
+
+/* ===============================
+   TERMINAL / COMMAND / COMMENT BLOCKS
+   =============================== */
+.cmd {
+    color: #d4d4d4;
+    font-weight: bold;
+    background: #1e1e1e;
+    border-radius: 3px;
+    padding: 0 4px;
+}
+
+pre code.cmd-block {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-left: 4px solid #00bcd4;
+    padding: 8px;
+    border-radius: 6px;
+    display: block;
+    overflow-x: auto;
+}
+
+/* ===============================
+   SECTION COLLAPSIBLE (H2)
+   =============================== */
+.section {
+    background: var(--color-bg-secondary);
+    padding: 18px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px var(--color-shadow);
+}
+
+.section .step-content > p {
+  font-size: 14px;
+  font-weight: 500;
+  color: #c9d1d9;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+
+.section-header {
+    cursor: pointer;
+    padding: 5px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.section-header:hover h2 {
+    color: #80deea;
+}
+
+.section-header::after {
+    content: '▼';
+    font-size: 14px;
+    color: var(--color-accent-blue);
+    transition: transform 0.3s;
+}
+
+.section-header.active::after {
+    transform: rotate(180deg);
+}
+
+.section-content {
+    max-height: 0;
+    overflow: hidden;
+    padding: 0;
+    border-top: 1px solid transparent;
+}
+
+.section-content.expanded {
+    max-height: 4000px;
+    padding-top: 15px;
+    border-top: 1px solid #444;
+}
+
+/* ===============================
+   STEP COLLAPSIBLE (H4)
+   =============================== */
+.step-header h4 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #e5e7eb;
+  margin-top: 16px;
+  margin-bottom: 6px;
+}
+
+
+.step-header h4 {
+    margin: 0;
+    transition: color 0.2s;
+}
+
+.step-header:hover h4 {
+    color: var(--color-accent-blue);
+}
+
+.step-header::after {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--color-accent-blue);
+}
+
+.step-header.active::after {
+}
+
+.step-content {
+    max-height: 0;
+    overflow: hidden;
+    padding-bottom: 0;
+    border-bottom: 1px solid #333;
+}
+
+.step-content.expanded {
+    max-height: 5000px;
+    padding-bottom: 10px;
+}
+
+/* ===============================
+   NOTE BLOCK
+   =============================== */
+.note {
+    background: rgba(0, 188, 212, 0.1);
+    padding: 10px;
+    border-left: 3px solid var(--color-accent-blue);
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+/* ===============================
+   FIXED FOOTER NAV
+   =============================== */
+#nav-widget {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: var(--color-bg-secondary);
+    border-top: 1px solid #444;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    z-index: 1000;
+}
+
+#nav-widget strong {
+    margin-right: 15px;
+}
+
+#nav-widget button {
+    background: #444;
+    color: var(--color-text-primary);
+    border: 1px solid #555;
+    padding: 5px 12px;
+    margin-right: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+#nav-widget button:hover {
+    background: #555;
+}
+
+#nav-widget button.active {
+    background: var(--color-accent-blue);
+    border-color: var(--color-accent-blue);
+    color: #1e1e1e;
+}
+
+/* ===============================
+   CODE LINK BLOCKS
+   =============================== */
+.code-link {
+    margin: 8px 0;
+}
+
+.code-link a {
+    color: var(--color-accent-blue);
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.code-link a:hover {
+    text-decoration: underline;
+}
+
+.text-box-output {
+  color: #9FE870;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+
+  margin: 8px 0;
+  padding-left: 16px;   /* indentation only */
+  border-left: 4px solid transparent; /* no visual background */
+}
+
+/* ===============================
+   LIST (type: list)
+   =============================== */
+
+.section .step-content ul {
+  margin: 4px 0 6px 20px;   /* tighter top, same indentation */
+  padding: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: #d1d5db;
+}
+
+.section .step-content ul li {
+  margin-bottom: 2px;      /* tighter vertical rhythm */
+}
+
+
+
+pre { line-height: 125%; }
+td.linenos .normal { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+span.linenos { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+td.linenos .special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+.highlight .hll { background-color: #49483e }
+.highlight .c { color: #959077 } /* Comment */
+.highlight .err { color: #ED007E; background-color: #1E0010 } /* Error */
+.highlight .esc { color: #F8F8F2 } /* Escape */
+.highlight .g { color: #F8F8F2 } /* Generic */
+.highlight .k { color: #66D9EF } /* Keyword */
+.highlight .l { color: #AE81FF } /* Literal */
+.highlight .n { color: #F8F8F2 } /* Name */
+.highlight .o { color: #FF4689 } /* Operator */
+.highlight .x { color: #F8F8F2 } /* Other */
+.highlight .p { color: #F8F8F2 } /* Punctuation */
+.highlight .ch { color: #959077 } /* Comment.Hashbang */
+.highlight .cm { color: #959077 } /* Comment.Multiline */
+.highlight .cp { color: #959077 } /* Comment.Preproc */
+.highlight .cpf { color: #959077 } /* Comment.PreprocFile */
+.highlight .c1 { color: #959077 } /* Comment.Single */
+.highlight .cs { color: #959077 } /* Comment.Special */
+.highlight .gd { color: #FF4689 } /* Generic.Deleted */
+.highlight .ge { color: #F8F8F2; font-style: italic } /* Generic.Emph */
+.highlight .ges { color: #F8F8F2; font-weight: bold; font-style: italic } /* Generic.EmphStrong */
+.highlight .gr { color: #F8F8F2 } /* Generic.Error */
+.highlight .gh { color: #F8F8F2 } /* Generic.Heading */
+.highlight .gi { color: #A6E22E } /* Generic.Inserted */
+.highlight .go { color: #66D9EF } /* Generic.Output */
+.highlight .gp { color: #FF4689; font-weight: bold } /* Generic.Prompt */
+.highlight .gs { color: #F8F8F2; font-weight: bold } /* Generic.Strong */
+.highlight .gu { color: #959077 } /* Generic.Subheading */
+.highlight .gt { color: #F8F8F2 } /* Generic.Traceback */
+.highlight .kc { color: #66D9EF } /* Keyword.Constant */
+.highlight .kd { color: #66D9EF } /* Keyword.Declaration */
+.highlight .kn { color: #FF4689 } /* Keyword.Namespace */
+.highlight .kp { color: #66D9EF } /* Keyword.Pseudo */
+.highlight .kr { color: #66D9EF } /* Keyword.Reserved */
+.highlight .kt { color: #66D9EF } /* Keyword.Type */
+.highlight .ld { color: #E6DB74 } /* Literal.Date */
+.highlight .m { color: #AE81FF } /* Literal.Number */
+.highlight .s { color: #E6DB74 } /* Literal.String */
+.highlight .na { color: #A6E22E } /* Name.Attribute */
+.highlight .nb { color: #F8F8F2 } /* Name.Builtin */
+.highlight .nc { color: #A6E22E } /* Name.Class */
+.highlight .no { color: #66D9EF } /* Name.Constant */
+.highlight .nd { color: #A6E22E } /* Name.Decorator */
+.highlight .ni { color: #F8F8F2 } /* Name.Entity */
+.highlight .ne { color: #A6E22E } /* Name.Exception */
+.highlight .nf { color: #A6E22E } /* Name.Function */
+.highlight .nl { color: #F8F8F2 } /* Name.Label */
+.highlight .nn { color: #F8F8F2 } /* Name.Namespace */
+.highlight .nx { color: #A6E22E } /* Name.Other */
+.highlight .py { color: #F8F8F2 } /* Name.Property */
+.highlight .nt { color: #FF4689 } /* Name.Tag */
+.highlight .nv { color: #F8F8F2 } /* Name.Variable */
+.highlight .ow { color: #FF4689 } /* Operator.Word */
+.highlight .pm { color: #F8F8F2 } /* Punctuation.Marker */
+.highlight .w { color: #F8F8F2 } /* Text.Whitespace */
+.highlight .mb { color: #AE81FF } /* Literal.Number.Bin */
+.highlight .mf { color: #AE81FF } /* Literal.Number.Float */
+.highlight .mh { color: #AE81FF } /* Literal.Number.Hex */
+.highlight .mi { color: #AE81FF } /* Literal.Number.Integer */
+.highlight .mo { color: #AE81FF } /* Literal.Number.Oct */
+.highlight .sa { color: #E6DB74 } /* Literal.String.Affix */
+.highlight .sb { color: #E6DB74 } /* Literal.String.Backtick */
+.highlight .sc { color: #E6DB74 } /* Literal.String.Char */
+.highlight .dl { color: #E6DB74 } /* Literal.String.Delimiter */
+.highlight .sd { color: #E6DB74 } /* Literal.String.Doc */
+.highlight .s2 { color: #E6DB74 } /* Literal.String.Double */
+.highlight .se { color: #AE81FF } /* Literal.String.Escape */
+.highlight .sh { color: #E6DB74 } /* Literal.String.Heredoc */
+.highlight .si { color: #E6DB74 } /* Literal.String.Interpol */
+.highlight .sx { color: #E6DB74 } /* Literal.String.Other */
+.highlight .sr { color: #E6DB74 } /* Literal.String.Regex */
+.highlight .s1 { color: #E6DB74 } /* Literal.String.Single */
+.highlight .ss { color: #E6DB74 } /* Literal.String.Symbol */
+.highlight .bp { color: #F8F8F2 } /* Name.Builtin.Pseudo */
+.highlight .fm { color: #A6E22E } /* Name.Function.Magic */
+.highlight .vc { color: #F8F8F2 } /* Name.Variable.Class */
+.highlight .vg { color: #F8F8F2 } /* Name.Variable.Global */
+.highlight .vi { color: #F8F8F2 } /* Name.Variable.Instance */
+.highlight .vm { color: #F8F8F2 } /* Name.Variable.Magic */
+.highlight .il { color: #AE81FF } /* Literal.Number.Integer.Long */
+
+</style>
+
+<link rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/monokai.min.css">
+</head>
+<body>
+
+<h1>The Langchain Vector Store flow</h1>
+<div class="section" id="section-1">
+  <div class="section-header">
+    <h2>1 – Vector Database pipeline</h2>
+  </div>
+  <div class="section-content">
+    <h3>Goal</h3>
+    <p>Understand the components of vector database pipeline</p>
+  
+<div class="step-header"><h4>1. Load the documents</h4></div>
+<div class="step-content">
+</div>
+<div class="step-header"><h4>2. Create the chunk</h4></div>
+<div class="step-content">
+</div>
+<div class="step-header"><h4>3. Create the vector store of chunks using some Embedding Model.</h4></div>
+<div class="step-content">
+</div>
+<div class="step-header"><h4>4. Create the retriever</h4></div>
+<div class="step-content">
+</div>
+<div class="step-header"><h4>5. Loading and Invoking the retriever</h4></div>
+<div class="step-content">
+</div></div></div>
+<div class="section" id="section-2">
+  <div class="section-header">
+    <h2>2 – Loading the document</h2>
+  </div>
+  <div class="section-content">
+    <h3>Goal</h3>
+    <p>Undestand how to work with documents in Langchain</p>
+  
+<div class="step-header"><h4>1. Langchain `Document` class</h4></div>
+<div class="step-content">
+<p>It is LangChain’s canonical data container for text.</p><pre><code class="language-bash">&lt;class 'langchain_core.documents.base.Document'&gt;</code></pre><p>Think of it as a minimal, standardized record that flows through the entire pipeline:</p><div class="text-box-output">Loader → Splitter → Embeddings → VectorStore → Retriever → LLM<br><br>Every stage expects Document objects.</div><p>What a Document actually contains</p><div class="text-box-output">At minimum:<br><br>Document(<br>    page_content: str,<br>    metadata: dict<br>)<br><br><br>Example:<br><br><br>Document(<br>    page_content="Memcached is a distributed in-memory cache...",<br>    metadata={<br>        "source": "documents/system_design.pdf",<br>        "page": 12<br>    }<br>)</div></div>
+<div class="step-header"><h4>2. Document Loader Class</h4></div>
+<div class="step-content">
+<p>A Document Loader class in LangChain is a source adapter.</p><div class="text-box-output">Its only responsibility is to turn raw data (files, URLs, APIs, DB rows, etc.) into Document objects.</div><p>Formal definition</p><div class="text-box-output">A Document Loader is a class that implements a load() method and returns<br>List[langchain_core.documents.base.Document].</div><p>What a Document Loader MUST do</p><ul><li>Reads from a source</li></ul><div class="text-box-output">File system<br><br>- Web<br>- PDF<br>- Database<br>- API</div><ul><li>Extracts raw text</li><li>Wraps text into `Document` objects</li><li>Adds metadata</li></ul><p>Example: PyPDFLoader</p><pre><code class="language-python">from langchain_community.document_loaders import PyPDFLoader
+loader = PyPDFLoader("file.pdf")
+docs = loader.load()</code></pre><div class="text-box-output">Output:<br><br>[<br>  Document(<br>    page_content="Text from page 1",<br>    metadata={"source": "file.pdf", "page": 1}<br>  ),<br>  Document(<br>    page_content="Text from page 2",<br>    metadata={"source": "file.pdf", "page": 2}<br>  )<br>]</div><p>Every page become a document</p></div>
+<div class="step-header"><h4>3. Directory Loader</h4></div>
+<div class="step-content">
+<p>DirectoryLoader is a filesystem orchestrator.</p><div class="text-box-output">It does not parse content.<br><br>It only walks directories and delegates each file to a real Document Loader.</div><p>What DirectoryLoader does (step-by-step)</p><ul><li>1. Scan directory recursively</li><li>2. Match files using glob</li><li>3. For each file: (1) instantiate loader_cls(file_path), (2) call loader.load()</li><li>4. Collect all Document objects</li><li>5. Return List[Document]</li></ul><pre><code class="language-python">from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
+
+loader = DirectoryLoader(
+    path="./documents",
+    glob="**/*.pdf",
+    loader_cls=PyPDFLoader
+)
+
+documents = loader.load() # returns a list of LangchainDocuments</code></pre></div></div></div>
+<div class="section" id="section-3">
+  <div class="section-header">
+    <h2>3 – Create the chunk</h2>
+  </div>
+  <div class="section-content">
+    <h3>Goal</h3>
+    <p>How to create chunk</p>
+  </div></div>
+<div class="section" id="section-4">
+  <div class="section-header">
+    <h2>4 – Create the vector store of chunks using some Embedding Model.</h2>
+  </div>
+  <div class="section-content">
+    <h3>Goal</h3>
+    <p></p>
+  </div></div>
+<div class="section" id="section-5">
+  <div class="section-header">
+    <h2>5 – Create the retriever</h2>
+  </div>
+  <div class="section-content">
+    <h3>Goal</h3>
+    <p></p>
+  </div></div>
+<div class="section" id="section-6">
+  <div class="section-header">
+    <h2>6 – Loading and invoking the retriever</h2>
+  </div>
+  <div class="section-content">
+    <h3>Goal</h3>
+    <p></p>
+  </div></div>
+<div class="section" id="section-7">
+  <div class="section-header">
+    <h2>7 – The full pipeline in action</h2>
+  </div>
+  <div class="section-content">
+    <h3>Goal</h3>
+    <p>How to structure the code and files</p>
+  
+<div class="step-header"><h4>1. ingestion.py</h4></div>
+<div class="step-content">
+</div>
+<div class="step-header"><h4>2. retriever.py</h4></div>
+<div class="step-content">
+</div>
+<div class="step-header"><h4>3. main.py (using retriever)</h4></div>
+<div class="step-content">
+</div></div></div>
+<div class="section" id="section-8">
+  <div class="section-header">
+    <h2>8 – Application Example: RAG</h2>
+  </div>
+  <div class="section-content">
+    <h3>Goal</h3>
+    <p>Use vectore store to retrieve similar text and use it for generation</p>
+  
+<div class="step-header"><h4>1. ingestion.py</h4></div>
+<div class="step-content">
+<pre><code class="language-python">import os
+
+from dotenv import load_dotenv
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import DirectoryLoader, PyPDFLoader
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+load_dotenv()
+
+# loader and load the documents
+documents_dir = "./documents"
+if not(os.path.exists(documents_dir)) or  not os.listdir(documents_dir):
+    print(f"Warning: Empty or no document {documents_dir} dir")
+loader = DirectoryLoader(
+    documents_dir,
+    glob = "**/*.pdf",
+    loader_cls=PyPDFLoader,
+    loader_kwargs = {"mode":"single"}
+)
+documents_list = loader.load()
+
+# splitter and get the document splits
+text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+    chunk_size = 90,
+    chunk_overlap = 10,
+)
+
+documents_chunk = text_splitter.split_documents(documents_list)
+
+# Vectore store constants
+collection_name = "rag_chroma"
+persist_directory = "./.chroma"
+
+# create vectore store
+vector_store = Chroma.from_documents(
+    documents = documents_chunk,
+    collection_name = collection_name,
+    persist_directory= persist_directory,
+    embedding = OpenAIEmbeddings(),
+)</code></pre></div>
+<div class="step-header"><h4>2. retriever.py</h4></div>
+<div class="step-content">
+<pre><code class="language-python">from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Vectore store constants
+collection_name = "rag_chroma"
+persist_directory = "./.chroma"
+
+
+# create the retriever
+retriever    = Chroma(
+    collection_name = collection_name,
+    persist_directory = persist_directory,
+    embedding_function= OpenAIEmbeddings()
+).as_retriever()
+
+
+if __name__ == "__main__":
+    result = retriever.invoke(input="What is memcache",k=10)
+    printed = False
+    for val in result:
+        if not printed:
+            print(type(val))
+            print()
+            printed= True
+        print(val.page_content)
+        print()</code></pre></div>
+<div class="step-header"><h4>3. main.py</h4></div>
+<div class="step-content">
+<pre><code class="language-python">from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+from retriever import retriever
+
+load_dotenv()
+
+prompt_template = """ 
+You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise.
+Question: {question} 
+Context: {context} 
+Answer:
+"""
+
+prompt = ChatPromptTemplate.from_template(prompt_template)
+
+llm = ChatOpenAI()
+
+chain = prompt | llm | StrOutputParser()
+
+
+if __name__ == "__main__":
+    user_question = input("You: ")
+    retrieved_documents = retriever.invoke(user_question,k=5)
+    context = [doc.page_content for doc in retrieved_documents]
+    answer = chain.invoke({
+        "question" : user_question,
+        "context": context,
+    })
+    print("\n[AI] ",answer)
+    print()
+    print("#"*30)
+    print("\nRetrived documents")
+    for txt in context:
+        print(txt)
+        print()</code></pre></div></div></div>
+
+<div id="nav-widget"><strong>Sections:</strong></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/dockerfile.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
+
+<script>
+
+/* ===============================
+   STEP COLLAPSE LOGIC
+   =============================== */
+
+function initCollapsibleSteps(sectionContent) {
+  const stepHeaders = sectionContent.querySelectorAll(".step-header");
+
+  stepHeaders.forEach(header => {
+    const content = header.nextElementSibling;
+
+    // force collapsed initial state
+    header.classList.remove("active");
+    content.classList.remove("expanded");
+
+    header.onclick = () => {
+      const isOpen = content.classList.contains("expanded");
+
+      // collapse all steps in this section
+      stepHeaders.forEach(sh => {
+        sh.classList.remove("active");
+        sh.nextElementSibling.classList.remove("expanded");
+      });
+
+      // toggle current step
+      if (!isOpen) {
+        header.classList.add("active");
+        content.classList.add("expanded");
+      }
+    };
+  });
+}
+
+/* ===============================
+   SECTION COLLAPSE + NAV LOGIC
+   =============================== */
+
+function initCollapsibleSections() {
+  const navWidget = document.getElementById("nav-widget");
+  const sections = document.querySelectorAll(".section");
+
+  // clear nav buttons (keep label)
+  while (navWidget.children.length > 1) {
+    navWidget.removeChild(navWidget.lastChild);
+  }
+
+  sections.forEach(section => {
+    const wrapper = section.querySelector(".section-header");
+    const content = section.querySelector(".section-content");
+    const headerText = wrapper.querySelector("h2").textContent;
+    const sectionId = section.id;
+
+    // force collapsed initial state
+    wrapper.classList.remove("active");
+    content.classList.remove("expanded");
+
+    // create nav button
+    const btn = document.createElement("button");
+    btn.textContent = headerText.split("–")[0].trim();
+    btn.onclick = () => {
+      expandSection(sectionId);
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    navWidget.appendChild(btn);
+
+    // section header click
+    wrapper.onclick = () => expandSection(sectionId);
+  });
+}
+
+/* ===============================
+   EXPAND / COLLAPSE SECTION
+   (toggle + accordion)
+   =============================== */
+
+function expandSection(targetId) {
+  const sections = document.querySelectorAll(".section");
+  const navButtons = document.querySelectorAll("#nav-widget button");
+
+  sections.forEach(section => {
+    const wrapper = section.querySelector(".section-header");
+    const content = section.querySelector(".section-content");
+    const isTarget = section.id === targetId;
+    const isOpen = content.classList.contains("expanded");
+
+    // collapse all sections
+    wrapper.classList.remove("active");
+    content.classList.remove("expanded");
+
+    // toggle target
+    if (isTarget && !isOpen) {
+      wrapper.classList.add("active");
+      content.classList.add("expanded");
+
+      // init steps only for opened section
+      initCollapsibleSteps(content);
+    }
+  });
+
+  // sync nav buttons
+  navButtons.forEach(btn => {
+    btn.classList.toggle(
+      "active",
+      targetId.includes(btn.textContent)
+    );
+  });
+}
+
+/* ===============================
+   SAFE INIT
+   =============================== */
+
+document.addEventListener("DOMContentLoaded", () => {
+  initCollapsibleSections();
+});
+
+
+hljs.highlightAll();
+</script>
+
+</body>
+</html>
